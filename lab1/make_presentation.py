@@ -58,22 +58,12 @@ YELLOW_HIGH = np.array([35, 255, 255])
 yellow_mask = cv2.inRange(hsv, YELLOW_LOW, YELLOW_HIGH)
 yellow_share = float((yellow_mask > 0).mean()) * 100
 
-open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
-alpha = cv2.bitwise_not(yellow_mask)
-alpha = cv2.morphologyEx(alpha, cv2.MORPH_OPEN, open_kernel)
-alpha = cv2.morphologyEx(alpha, cv2.MORPH_CLOSE, close_kernel)
-opaque_share = float((alpha > 0).mean()) * 100
+BRIGHTNESS_SHIFT = 30
+brightened = cv2.convertScaleAbs(image, alpha=1.0, beta=BRIGHTNESS_SHIFT)
+brightened_diff = cv2.absdiff(brightened, image)
 
 ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
 diff = cv2.absdiff(ycrcb[:, :, 0], gray)
-
-checker = np.indices((height, width)).sum(axis=0) // 24 % 2
-checker = np.where(checker == 0, 236, 214).astype(np.uint8)
-alpha_f = (alpha / 255.0)[:, :, None]
-composited = (image_rgb.astype(np.float32) * alpha_f
-              + cv2.cvtColor(checker, cv2.COLOR_GRAY2RGB).astype(np.float32) * (1 - alpha_f))
-composited = composited.astype(np.uint8)
 
 objects_only = cv2.cvtColor(
     cv2.bitwise_and(image, image, mask=cv2.bitwise_not(yellow_mask)), cv2.COLOR_BGR2RGB)
@@ -104,9 +94,12 @@ model_panels = F.panels(ASSETS / "models.png",
                          (ycrcb[:, :, 0], "YCrCb · Y"),
                          (cv2.cvtColor(image, cv2.COLOR_BGR2LAB)[:, :, 2], "LAB · b")],
                         width=11.53)
-alpha_panels = F.panels(ASSETS / "alpha.png",
-                        [(alpha, "Альфа-канал"), (composited, "RGBA поверх подложки")],
-                        width=8.05)
+brightness_panels = F.panels(
+    ASSETS / "brightness.png",
+    [(image_rgb, "Исходное"),
+     (cv2.cvtColor(brightened, cv2.COLOR_BGR2RGB), f"Яркость +{BRIGHTNESS_SHIFT}")],
+    width=8.05,
+)
 
 
 def draw_sigma(ax):
@@ -172,7 +165,7 @@ deck.steps(slide, [
     "Разделить кадр на каналы B, G, R и собрать их статистику",
     "Построить гистограмму тона H и выделить фон бинарной маской",
     "Сравнить модели HSV, HLS, YCrCb и LAB между собой",
-    "Убрать фон по маске и сохранить «стикер» в формате RGBA",
+    "Увеличить яркость изображения и сохранить результат",
 ], x=T.MARGIN, y=2.35, w=11.53, row_h=0.80, start=6, size=T.BODY_LG)
 
 # Теория
@@ -295,17 +288,17 @@ deck.caption(slide, "Канал Y модели YCrCb и полутоновое �
                     "расхождение возникает только из-за целочисленного округления.",
              x=T.MARGIN, y=bottom + 0.28, w=11.53)
 
-slide = deck.slide("Стикер без фона", "Маска фона переиспользуется как прозрачность",
+slide = deck.slide("Изменение яркости изображения", "Увеличиваем каждый канал на 30 уровней",
                    kicker="Задача 10")
-deck.picture(slide, alpha_panels, T.MARGIN, 2.15, w=8.05)
+deck.picture(slide, brightness_panels, T.MARGIN, 2.15, w=8.05)
 deck.metrics(slide, [
-    (f"{opaque_share:.2f} %", "непрозрачных пикселей"),
-    ("(563, 1000, 4)", "чтение с IMREAD_UNCHANGED"),
-    ("(563, 1000, 3)", "без флага — альфа теряется"),
+    (f"+{BRIGHTNESS_SHIFT}", "смещение каждого канала"),
+    ("1.0", "коэффициент сохранения контраста"),
+    (f"{(brightened_diff > 0).any(axis=2).mean() * 100:.2f} %", "пикселей изменилось"),
 ], x=9.15, y=2.15, w=3.28, h=3.55, vertical=True)
-deck.code(slide, "alpha = cv2.bitwise_not(yellow_mask)\n"
-                 "rgba = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)\n"
-                 "rgba[:, :, 3] = alpha",
+deck.code(slide, "brightened = cv2.convertScaleAbs(\n"
+                 "    image, alpha=1.0, beta=30)\n"
+                 "cv2.imwrite('output/brightened.png', brightened)",
           x=T.MARGIN, y=5.24, w=8.05)
 
 # Вопросы и итоги
@@ -336,7 +329,7 @@ bottom = deck.checklist(slide, [
     f"Полоса шириной 20 пикселей закрашена синим — {height * 20} пикселей — и сохранена",
     f"Фон выделен одним диапазоном тона: {yellow_share:.2f} % площади",
     f"Канал Y и полутоновое изображение совпали на {(diff == 0).mean() * 100:.2f} % пикселей",
-    f"Получен PNG с альфа-каналом: непрозрачны {opaque_share:.2f} % пикселей",
+    f"Яркость увеличена на {BRIGHTNESS_SHIFT} уровней и сохранена в output/brightened.png",
 ], x=T.MARGIN, y=2.15, w=11.53, size=16.5)
 deck.text(slide,
           "Изображение — обычный числовой массив, а цветовые модели — разные системы "

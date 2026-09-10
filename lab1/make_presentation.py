@@ -51,13 +51,18 @@ manual_threshold = int(np.argmax(sigma_b))
 
 hue_hist = cv2.calcHist([hsv], [0], None, [180], [0, 180]).ravel()
 dominant_hue = int(np.argmax(hue_hist))
-yellow_mask = cv2.inRange(hsv, np.array([20, 80, 80]), np.array([35, 255, 255]))
+# Нижняя граница 26, а не 20: у оранжевого сектора шлема H ≈ 19…25, и весь
+# жёлтый диапазон срезал бы половину головы вместе с фоном.
+YELLOW_LOW = np.array([26, 80, 80])
+YELLOW_HIGH = np.array([35, 255, 255])
+yellow_mask = cv2.inRange(hsv, YELLOW_LOW, YELLOW_HIGH)
 yellow_share = float((yellow_mask > 0).mean()) * 100
 
-kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
 alpha = cv2.bitwise_not(yellow_mask)
-alpha = cv2.morphologyEx(alpha, cv2.MORPH_OPEN, kernel)
-alpha = cv2.morphologyEx(alpha, cv2.MORPH_CLOSE, kernel)
+alpha = cv2.morphologyEx(alpha, cv2.MORPH_OPEN, open_kernel)
+alpha = cv2.morphologyEx(alpha, cv2.MORPH_CLOSE, close_kernel)
 opaque_share = float((alpha > 0).mean()) * 100
 
 ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
@@ -270,11 +275,12 @@ slide = deck.slide("Выделение фона по цвету", "Один ди
 chart_bottom = deck.picture(slide, hue_chart, T.MARGIN, 2.15, w=5.62).bottom_in
 deck.picture(slide, mask_panels, 6.81, 2.15, w=5.62)
 deck.code(slide, "yellow_mask = cv2.inRange(hsv,\n"
-                 "    np.array([20, 80, 80]), np.array([35, 255, 255]))",
+                 "    np.array([26, 80, 80]), np.array([35, 255, 255]))",
           x=6.81, y=4.02, w=5.62)
 deck.metrics(slide, [
     (f"H = {dominant_hue}", f"доминирующий тон, ≈ {dominant_hue * 2}° на цветовом круге"),
     (f"{yellow_share:.2f} %", "площади кадра занимает фон"),
+    ("26 … 35", "нижняя граница поднята: у шлема H ≈ 19…25"),
 ], x=T.MARGIN, y=chart_bottom + 0.30, w=11.53, h=1.06)
 
 slide = deck.slide("Сравнение цветовых моделей", "Канал яркости у всех моделей один и тот же",
@@ -297,7 +303,8 @@ deck.metrics(slide, [
     ("(563, 1000, 4)", "чтение с IMREAD_UNCHANGED"),
     ("(563, 1000, 3)", "без флага — альфа теряется"),
 ], x=9.15, y=2.15, w=3.28, h=3.55, vertical=True)
-deck.code(slide, "rgba = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)\n"
+deck.code(slide, "alpha = cv2.bitwise_not(yellow_mask)\n"
+                 "rgba = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)\n"
                  "rgba[:, :, 3] = alpha",
           x=T.MARGIN, y=5.24, w=8.05)
 

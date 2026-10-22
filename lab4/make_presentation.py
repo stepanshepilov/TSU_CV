@@ -52,9 +52,11 @@ sobel_y = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
 gradient = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
 
 # --- 4. повышение резкости -------------------------------------------------
+blurred = cv2.GaussianBlur(image, (5, 5), sigmaX=3)
 sharpen_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
-sharpened = cv2.filter2D(image, -1, sharpen_kernel)
-mad_sharpen = mad(sharpened, image)
+sharpened = cv2.filter2D(blurred, -1, sharpen_kernel)
+mad_sharpen = mad(sharpened, blurred)
+mad_sharpen_pipeline = mad(sharpened, image)
 
 # --- 5. гауссов ВЧ-фильтр --------------------------------------------------
 spectrum = np.fft.fftshift(np.fft.fft2(image))
@@ -80,8 +82,8 @@ sobel_panels = F.panels(ASSETS / "sobel.png",
                          (norm(np.abs(sobel_y)), "Собель Y — горизонтальные границы"),
                          (norm(gradient), "Модуль градиента")], width=11.53)
 sharpen_panels = F.panels(ASSETS / "sharpen.png",
-                          [(image[120:400, 60:560], "Исходное"),
-                           (sharpened[120:400, 60:560], "После ядра sharpen")], width=8.05)
+                          [(blurred, "Размытый вход"),
+                           (sharpened, "После повышения резкости")], width=8.05)
 spectrum_panels = F.panels(ASSETS / "spectrum.png",
                            [(norm(log_spectrum), "log(1 + |F|) — спектр"),
                             (norm(gaussian_hpf), f"Маска ВЧ, σ = {SIGMA}"),
@@ -112,8 +114,9 @@ mask_chart = F.chart(ASSETS / "mask.png", 5.62, 3.05, draw_mask,
 
 
 def draw_effect(ax):
-    labels = ["Усреднение\n5 × 5", "Усреднение\n11 × 11", "Медиана 5 × 5\nна шуме", "Sharpen"]
-    values = [mad_5, mad_11, mad_median, mad_sharpen]
+    labels = ["Усреднение\n5 × 5", "Усреднение\n11 × 11", "Медиана 5 × 5\nна шуме",
+              "Размытие +\nsharpen"]
+    values = [mad_5, mad_11, mad_median, mad_sharpen_pipeline]
     colors = [T.SERIES[0], T.SERIES[0], T.SERIES[1], T.SERIES[1]]
     bars = ax.bar(labels, values, color=colors, width=0.58)
     F.bar_labels(ax, bars, values, fmt="{:.2f}", dy=0.03)
@@ -205,20 +208,20 @@ deck.caption(slide, "Большое значение G означает резк
                     "модуль нормируется в диапазон 0…255.",
              x=T.MARGIN, y=bottom + 0.18, w=11.53)
 
-slide = deck.slide("Повышение резкости", "Центр ядра больше единицы, соседи отрицательны",
+slide = deck.slide("Повышение резкости", "Усиливаем детали размытого изображения",
                    kicker="Пункт 04")
 bottom = deck.picture(slide, sharpen_panels, T.MARGIN, 2.15, w=8.05).bottom_in
 deck.metrics(slide, [
-    (f"{mad_sharpen:.2f}", "среднее изменение относительно исходного"),
+    (f"{mad_sharpen:.2f}", "изменение относительно размытого входа"),
     ("I + α(I − G*I)", "эквивалент через unsharp masking"),
 ], x=9.15, y=2.15, w=3.28, h=2.34, vertical=True)
 bottom = deck.code(slide, "kernel = np.array([[ 0, -1,  0],\n"
                           "                   [-1,  5, -1],\n"
                           "                   [ 0, -1,  0]], dtype=np.float32)",
                    x=T.MARGIN, y=bottom + 0.26, w=8.05)
-deck.caption(slide, "Ядро усиливает разницу между центром и соседями: границы становятся "
-                    "контрастнее, но вместе с ними усиливаются шум и ореолы.",
-             x=T.MARGIN, y=bottom + 0.24, w=11.53)
+deck.caption(slide, "Обе панели показывают одну цепочку обработки: слева вход sharpen, "
+                    "справа результат. Усиление контуров может сопровождаться ореолами.",
+             x=T.MARGIN, y=bottom + 0.12, w=11.53)
 
 slide = deck.slide("Гауссов высокочастотный фильтр",
                    "H_ВЧ(D) = 1 − exp(−D² / 2σ²): плавный переход без ringing",
@@ -247,8 +250,9 @@ deck.picture(slide, effect_chart, T.MARGIN, 2.15, w=7.35)
 deck.note(slide,
           "Усреднение 11 × 11 меняет кадр почти вдвое сильнее, чем 5 × 5. Медианный "
           "фильтр, наоборот, приближает зашумлённый кадр к исходному: ошибка падает "
-          f"с {mad_noisy:.2f} до {mad_median:.2f}. Sharpen меняет немного, но "
-          "прицельно — только на границах.",
+          f"с {mad_noisy:.2f} до {mad_median:.2f}. Для диаграммы значение sharpen "
+          "показывает отклонение всей цепочки от исходника; на слайде 04 отдельно "
+          "сравниваются размытый вход и результат sharpen.",
           x=8.62, y=2.15, w=3.81, bar=True, size=T.BODY_SM)
 
 slide = deck.slide("Сравнение методов", "Сильные стороны и цена каждого фильтра",
@@ -335,7 +339,7 @@ bottom = deck.checklist(slide, [
     f"Усреднение 5 × 5 и 11 × 11 изменило кадр на {mad_5:.2f} и {mad_11:.2f} уровня",
     f"Медианный фильтр снизил ошибку зашумлённого кадра с {mad_noisy:.2f} до {mad_median:.2f}",
     f"Собель выделил границы: максимальный отклик {np.abs(sobel_x).max():.0f} по обоим осям",
-    f"Ядро sharpen повысило локальный контраст, изменив кадр на {mad_sharpen:.2f}",
+    f"Sharpen изменил размытый вход на {mad_sharpen:.2f} уровня яркости в среднем",
     f"Гауссов ВЧ-фильтр с σ = {SIGMA} подавил плавный фон и оставил контуры",
     "Показан весь путь через спектр: БПФ, маска, обратное БПФ",
 ], x=T.MARGIN, y=2.20, w=11.53, size=16.5)

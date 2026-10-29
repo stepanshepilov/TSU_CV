@@ -24,20 +24,23 @@ SAMPLES_PNG = ASSETS / "nb_samples.png"
 CLASSES = ["T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
            "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot"]
 
-TRAIN_SIZE, TEST_SIZE, EPOCHS, BATCH = 10000, 2000, 2, 128
+TRAIN_SIZE, TEST_SIZE, EPOCHS, BATCH = 10000, 2000, 15, 128
 
 # --- фактические результаты запуска ноутбука -------------------------------
 MODELS = [
-    ("Linear SVM", 0.8190, 5.50),
-    ("Базовая CNN", 0.8255, 4.36),
-    ("CNN + L2", 0.7840, 4.41),
-    ("CNN + Dropout", 0.8080, 4.35),
+    ("Linear SVM", 0.8190, 4.75),
+    ("Базовая CNN", 0.8965, 30.53),
+    ("CNN + L2", 0.8995, 30.68),
+    ("CNN + Dropout", 0.9010, 30.76),
 ]
 
 CURVES = {                      # test accuracy по эпохам
-    "Базовая CNN": [0.7140, 0.8255],
-    "CNN + L2": [0.7705, 0.7840],
-    "CNN + Dropout": [0.7735, 0.8080],
+    "Базовая CNN": [0.7140, 0.8255, 0.8380, 0.8450, 0.8640, 0.8605, 0.8885,
+                    0.8795, 0.8895, 0.8945, 0.8865, 0.8840, 0.8935, 0.8855, 0.8965],
+    "CNN + L2": [0.7995, 0.7855, 0.8370, 0.8625, 0.8465, 0.8830, 0.8810,
+                 0.8875, 0.8840, 0.8810, 0.8815, 0.8895, 0.8695, 0.9010, 0.8995],
+    "CNN + Dropout": [0.7625, 0.7995, 0.8380, 0.8400, 0.8520, 0.8555, 0.8775,
+                      0.8710, 0.8835, 0.8760, 0.8925, 0.8770, 0.8885, 0.8940, 0.9010],
 }
 
 # precision, recall, f1, support по классам для Linear SVM
@@ -47,42 +50,6 @@ SVM_REPORT = [
     (0.58, 0.59, 0.58, 197), (0.88, 0.91, 0.89, 200), (0.90, 0.91, 0.91, 194),
     (0.95, 0.95, 0.95, 188),
 ]
-
-CONFUSION_L2 = np.array([
-    [141, 1, 1, 10, 1, 0, 46, 0, 0, 0],
-    [0, 194, 0, 6, 0, 0, 3, 0, 0, 0],
-    [1, 0, 137, 0, 8, 0, 68, 0, 0, 0],
-    [3, 3, 0, 158, 0, 0, 26, 0, 0, 0],
-    [0, 0, 26, 8, 64, 0, 121, 0, 0, 0],
-    [0, 0, 0, 0, 0, 177, 1, 16, 0, 1],
-    [12, 0, 8, 4, 1, 1, 171, 0, 0, 0],
-    [0, 0, 0, 0, 0, 1, 0, 190, 1, 8],
-    [0, 0, 1, 2, 1, 2, 27, 0, 161, 0],
-    [0, 0, 0, 0, 0, 2, 0, 11, 0, 175],
-])
-CONFUSION_DROPOUT = np.array([
-    [163, 0, 0, 23, 2, 1, 9, 0, 2, 0],
-    [0, 190, 0, 13, 0, 0, 0, 0, 0, 0],
-    [2, 0, 151, 5, 35, 0, 20, 0, 1, 0],
-    [4, 2, 0, 177, 1, 0, 5, 0, 1, 0],
-    [0, 1, 28, 18, 158, 0, 13, 0, 1, 0],
-    [0, 0, 0, 1, 0, 179, 0, 13, 0, 2],
-    [55, 0, 35, 8, 39, 1, 57, 0, 2, 0],
-    [0, 0, 0, 0, 0, 5, 0, 173, 1, 21],
-    [1, 1, 0, 1, 0, 1, 1, 0, 189, 0],
-    [0, 0, 0, 0, 0, 3, 0, 6, 0, 179],
-])
-
-assert CONFUSION_L2.sum() == TEST_SIZE and CONFUSION_DROPOUT.sum() == TEST_SIZE
-assert abs(np.trace(CONFUSION_L2) / TEST_SIZE - 0.7840) < 1e-9
-assert abs(np.trace(CONFUSION_DROPOUT) / TEST_SIZE - 0.8080) < 1e-9
-
-
-def top_confusions(matrix, count=4):
-    """Самые частые пары «истинный класс → предсказанный»."""
-    pairs = [(matrix[i, j], i, j) for i in range(10) for j in range(10) if i != j]
-    return sorted(pairs, reverse=True)[:count]
-
 
 # --- примеры изображений из фигуры ноутбука --------------------------------
 def sample_tiles():
@@ -141,16 +108,16 @@ results_chart = draw_results(ASSETS / "results.png")
 
 
 def draw_curves(ax):
-    epochs = [1, 2]
+    epochs = range(1, EPOCHS + 1)
     for index, (name, values) in enumerate(CURVES.items()):
         ax.plot(epochs, values, "o-", color=T.SERIES[index], markersize=5, label=name)
     ax.axhline(MODELS[0][1], color=T.SERIES[3], linestyle="--", linewidth=1.4)
-    ax.annotate("Linear SVM", xy=(1.02, MODELS[0][1]), xytext=(1.02, MODELS[0][1] + 0.006),
+    ax.annotate("Linear SVM", xy=(1.02, MODELS[0][1]), xytext=(1.5, MODELS[0][1] + 0.006),
                 color=T.SERIES[3], fontsize=9.5, weight="bold")
-    ax.set_xticks(epochs)
+    ax.set_xticks(range(1, EPOCHS + 1, 2))
     ax.set_xlabel("Эпоха")
     ax.set_ylabel("Accuracy на тесте")
-    ax.set_xlim(0.9, 2.1)
+    ax.set_xlim(0.7, EPOCHS + 0.3)
     ax.legend(loc="lower right")
 
 
@@ -174,35 +141,7 @@ def draw_f1(ax):
 f1_chart = F.chart(ASSETS / "f1.png", 7.35, 4.05, draw_f1, pad=(1.15, 0.48, 0.16, 0.26))
 
 
-def draw_confusions(path, width=11.53, height=4.20):
-    fig = F.figure(width, height)
-    ticks = np.arange(10)
-    for column, (matrix, title) in enumerate([(CONFUSION_L2, "CNN + L2"),
-                                              (CONFUSION_DROPOUT, "CNN + Dropout")]):
-        ax = fig.add_axes([0.105 + column * 0.455, 0.12, 0.34, 0.78])
-        ax.imshow(matrix, cmap="Blues", vmin=0, vmax=matrix.max())
-        for i in range(10):
-            for j in range(10):
-                value = matrix[i, j]
-                if value == 0:
-                    continue
-                ax.text(j, i, str(value), ha="center", va="center", fontsize=7.4,
-                        color="white" if value > matrix.max() * 0.55 else "#" + T.MUTED)
-        ax.set_xticks(ticks)
-        ax.set_yticks(ticks)
-        ax.set_xticklabels(ticks, fontsize=8)
-        ax.set_yticklabels(ticks, fontsize=8)
-        ax.set_xlabel("Предсказанный класс", fontsize=9)
-        if column == 0:
-            ax.set_ylabel("Истинный класс", fontsize=9)
-        ax.set_title(title, fontsize=10.5)
-        ax.grid(False)
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-    return F.finish(fig, path)
-
-
-confusion_figure = draw_confusions(ASSETS / "confusion.png")
+confusion_figure = ASSETS / "notebook_confusion.png"
 
 # --- слайды ----------------------------------------------------------------
 deck = Deck("Лабораторная работа 6 · вариант 9")
@@ -280,7 +219,7 @@ deck.code(slide, "for values, targets in train_loader:\n"
                  "    optimizer.step()",
           x=T.MARGIN, y=3.80, w=7.55)
 
-slide = deck.slide("Результаты эксперимента", "CPU, две эпохи, одинаковые подвыборки",
+slide = deck.slide("Результаты эксперимента", "Подвыборки Fashion-MNIST, 15 эпох",
                    kicker="Пункт 03")
 bottom = deck.picture(slide, results_chart, T.MARGIN, 2.12, w=11.53).bottom_in
 deck.note(slide,
@@ -289,12 +228,12 @@ deck.note(slide,
           f"{MODELS[0][2]:.2f} с).",
           x=T.MARGIN, y=bottom + 0.28, w=11.53, bar=True, size=T.BODY_SM)
 
-slide = deck.slide("Обучение по эпохам", "За две эпохи ни одна модель не вышла на плато",
+slide = deck.slide("Обучение по эпохам", "Сравнение accuracy на тестовой выборке",
                    kicker="Пункт 04")
 bottom = deck.picture(slide, curves_chart, T.MARGIN, 2.15, w=5.62).bottom_in
 deck.metrics(slide, [
     (f"{MODELS[2][1]:.4f}", "CNN + L2: weight_decay = 1e-4"),
-    (f"{MODELS[3][1]:.4f}", "CNN + Dropout: p = 0.5"),
+    (f"{MODELS[3][1]:.4f}", "CNN + Dropout: p = 0.25"),
     (f"{MODELS[1][1]:.4f}", "базовая CNN без регуляризации"),
 ], x=6.81, y=2.15, w=5.62, h=3.15, vertical=True)
 deck.note(slide,
@@ -322,22 +261,13 @@ deck.caption(slide, "0 T-shirt/top · 1 Trouser · 2 Pullover · 3 Dress · 4 Co
                     "5 Sandal · 6 Shirt · 7 Sneaker · 8 Bag · 9 Ankle boot",
              x=T.MARGIN, y=bottom + 0.22, w=11.53)
 
-slide = deck.slide("Что именно путается", "Обе сети ошибаются на одной и той же группе классов",
+slide = deck.slide("Как читать матрицы ошибок", "Строки — истинные классы, столбцы — предсказанные",
                    kicker="Пункт 05")
-deck.table(slide, ["CNN + L2: истинный → предсказанный", "Ошибок"],
-           [[f"{CLASSES[i]} → {CLASSES[j]}", str(int(value))]
-            for value, i, j in top_confusions(CONFUSION_L2)],
-           x=T.MARGIN, y=2.25, w=5.4, widths=[0.74, 0.26], row_h=0.46)
-deck.table(slide, ["CNN + Dropout: истинный → предсказанный", "Ошибок"],
-           [[f"{CLASSES[i]} → {CLASSES[j]}", str(int(value))]
-            for value, i, j in top_confusions(CONFUSION_DROPOUT)],
-           x=7.03, y=2.25, w=5.4, widths=[0.74, 0.26], row_h=0.46)
 deck.note(slide,
-          "Диагональ у обеих моделей плотная, а вне диагонали видна одна и та же "
-          "группа: Shirt, T-shirt/top, Pullover и Coat. L2-модель сваливает "
-          "спорные случаи в класс Shirt, Dropout-модель — наоборот, теряет сам Shirt. "
-          "Обувь, сумки и брюки обе сети различают почти безошибочно.",
-          x=T.MARGIN, y=4.62, w=11.53, bar=True, size=T.BODY)
+          "Диагональ показывает верные предсказания, значения вне диагонали — "
+          "ошибки по конкретным парам классов. Обе матрицы взяты из фактического "
+          "выполнения ноутбука на тестовой подвыборке из 2 000 изображений.",
+          x=T.MARGIN, y=2.35, w=11.53, bar=True, size=T.BODY)
 
 slide = deck.slide("Контрольные вопросы", "Ответы по материалу работы", kicker="Защита")
 deck.qa(slide, [
@@ -367,7 +297,7 @@ bottom = deck.checklist(slide, [
     f"CNN + L2 (weight_decay = 1e-4) — {MODELS[2][1]:.4f}",
     f"CNN + Dropout (p = 0.5) — {MODELS[3][1]:.4f}",
     "Построены и разобраны матрицы ошибок обеих регуляризованных сетей",
-    "Ограничения запуска зафиксированы явно: CPU, 10 000 / 2 000, две эпохи",
+    "Для воспроизводимого CPU-запуска взяты подвыборки 10 000 / 2 000, обучение — 15 эпох",
 ], x=T.MARGIN, y=2.20, w=11.53, size=16.5)
 deck.text(slide,
           "Accuracy показывает, сколько ошибок сделала модель, а confusion matrix — "
